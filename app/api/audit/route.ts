@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import dns from 'dns/promises';
+// Replace the BLACKLISTS array in your app/api/audit/route.ts file with this:
+
 const BLACKLISTS = [
   'zen.spamhaus.org', 'b.barracudacentral.org', 'bl.spamcop.net', 'dnsbl.sorbs.net',
   'cbl.abuseat.org', 'psbl.surriel.com', 'dnsbl-1.uceprotect.net', 'dnsbl-2.uceprotect.net',
@@ -13,19 +15,7 @@ const BLACKLISTS = [
   'spam.spamrats.com', 'orvedb.aupads.org', 'relays.nether.net', 'singapore.blackholes.us', 
   'spam.dnsbl.anonmails.de', 'spamguard.leadmon.net', 'spamsources.fabel.dk', 'swl.spamhaus.org', 
   'virbl.bit.nl', 'wormrbl.imp.ch', 'rbl.interserver.net', 'rbl.megarbl.net', 
-  'rbl.realtimeblacklist.com', 'bl.0spam.org', 'rbl.0spam.org', 'combined.abuse.ch', 
-  'drone.abuse.ch', 'spam.abuse.ch', 'ubl.lashback.com', 'ubl.unsubscore.com', 
-  'virus.rbl.jp', 'ips.backscatterer.org', 'korea.services.net', 'relays.bl.gweep.ca', 
-  'proxy.bl.gweep.ca', 'singular.ttk.pte.hu', 'blacklist.woody.ch', 'bogons.cymru.com', 
-  'duinv.aupads.org', 'spambot.bls.digibase.ca', 'dnsbl.spfbl.net', 'truncate.gbudb.net', 
-  'rbl.rbldns.ru', 'bl.worst.spamrats.com', 'spameatingmonkey.net', 'all.spamrats.com',
-  'bl.scientificspam.net', 'bl.tiopan.com', 'cblless.anti-spam.org.cn', 'cblplus.anti-spam.org.cn',
-  'hostkarma.junkemailfilter.com', 'pbl.spamhaus.org', 'sbl.spamhaus.org', 'xbl.spamhaus.org',
-  'dnsbl.inps.de', 'dyn.shlink.org', 'rbl.schulte.org', 'spam.pedantic.org',
-  'uribl.zeustracker.abuse.ch', 'aspews.ext.janian.systems', 'backscatter.spameatingmonkey.net',
-  'bl.ipv6.spameatingmonkey.net', 'bl.nszones.com', 'bl.spameatingmonkey.net', 'cidr.bl.mcafee.com',
-  'db.wpbl.info', 'dnsbl.abuse.ch', 'dnsbl.beetjevreemd.nl', 'dnsbl.calivent.com.pe',
-  'dnsbl.cobion.com', 'dnsbl.darktech.org', 'dnsbl.isx.fr', 'dnsbl.mcu.net', 'dnsbl.net.ua'
+  'rbl.realtimeblacklist.com', 'hostkarma.junkemailfilter.com'
 ];
 
 const resolveWithTimeout = (hostname: string, timeoutMs = 2000) => {

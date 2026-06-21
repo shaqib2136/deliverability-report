@@ -118,7 +118,7 @@ function ReportApp() {
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">invisible emails.</span>
         </h1>
         <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-          Your cold outreach is useless if it lands in the spam folder. Deep-scan your domain, uncover hidden blacklists, and get a step-by-step recovery protocol in 60 seconds.
+          Your email marketing is useless if it lands in the spam folder. Deep-scan your domain, uncover hidden blacklists, and get a step-by-step recovery protocol in 60 seconds.
         </p>
         
         <form onSubmit={handleAudit} className="max-w-xl mx-auto flex flex-col sm:flex-row gap-3 mb-4">
