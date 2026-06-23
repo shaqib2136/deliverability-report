@@ -1,7 +1,190 @@
 "use client";
-
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+
+/* ─────────────────────────────────────────────
+   INLINE STYLES INJECTED ONCE
+   All keyframes + custom utilities that Tailwind
+   can't express as static class names.
+───────────────────────────────────────────── */
+const GLOBAL_STYLES = `
+  @import url('https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&f[]=cabinet-grotesk@400,500,700,800,900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #04070f;
+    --surface-1:  #080d1a;
+    --surface-2:  #0d1526;
+    --surface-3:  #111d30;
+    --border:     rgba(255,255,255,0.055);
+    --border-hi:  rgba(255,255,255,0.10);
+    --accent:     #0CF2D0;
+    --accent-dim: rgba(12,242,208,0.08);
+    --accent-glow:rgba(12,242,208,0.18);
+    --text-1:     #ffffff;
+    --text-2:     #8b9ab5;
+    --text-3:     #3d4f6b;
+    --red:        #f04d5c;
+    --amber:      #f0a34d;
+    --green:      #34d399;
+    --font-display: 'Cabinet Grotesk', system-ui, sans-serif;
+    --font-body:    'Satoshi', system-ui, sans-serif;
+  }
+
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text-2); }
+
+  ::selection { background: rgba(12,242,208,0.18); color: #fff; }
+
+  /* ── Keyframes ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes scanLine {
+    0%   { transform: translateY(-100%); }
+    100% { transform: translateY(400%); }
+  }
+  @keyframes progressGrow {
+    from { width: 0%; }
+    to   { width: var(--target-w); }
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(0.7); }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position:  400px 0; }
+  }
+
+  /* ── Utilities ── */
+  .font-display { font-family: var(--font-display); }
+  .font-body    { font-family: var(--font-body); }
+  .text-accent  { color: var(--accent); }
+  .text-1 { color: var(--text-1); }
+  .text-2 { color: var(--text-2); }
+  .text-3 { color: var(--text-3); }
+
+  /* Grid line background for hero */
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* Animated scan line on loading */
+  .scan-line::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, transparent 0%, rgba(12,242,208,0.07) 50%, transparent 100%);
+    height: 60px;
+    animation: scanLine 2.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  /* Premium card hover lift */
+  .card-lift {
+    transition: transform 0.22s cubic-bezier(0.16,1,0.3,1),
+                box-shadow 0.22s cubic-bezier(0.16,1,0.3,1);
+  }
+  .card-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.07);
+  }
+
+  /* Progress bar animation */
+  .progress-bar {
+    animation: progressGrow 1.1s cubic-bezier(0.16,1,0.3,1) 0.3s both;
+  }
+
+  /* Staggered fade-up for report sections */
+  .stagger-1 { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.05s both; }
+  .stagger-2 { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.12s both; }
+  .stagger-3 { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.19s both; }
+  .stagger-4 { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.26s both; }
+  .stagger-5 { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.33s both; }
+
+  /* Print overrides */
+  @media print {
+    :root { --bg: #fff; --surface-1: #f8f9fb; --surface-2: #f1f3f7; --surface-3: #e9ecf2; --border: rgba(0,0,0,0.1); --text-1: #0d1526; --text-2: #4a5568; --text-3: #a0aec0; }
+    body { background: #fff; }
+    .print-hidden { display: none !important; }
+  }
+`;
+
+/* ─────────────────────────────────────────────
+   SUB-COMPONENTS
+───────────────────────────────────────────── */
+
+/** Thin top-edge accent line shared by all major cards */
+const CardAccentLine = () => (
+  <div style={{
+    position: 'absolute', top: 0, left: 0, right: 0, height: '1px',
+    background: 'linear-gradient(90deg, transparent 0%, rgba(12,242,208,0.4) 40%, rgba(91,156,246,0.3) 70%, transparent 100%)',
+  }} />
+);
+
+/** Section divider */
+const Divider = () => (
+  <div style={{ height: '1px', background: 'var(--border)', margin: '0' }} />
+);
+
+/** Metric cell used in auth grid */
+const MetricCell = ({
+  label, value, valueColor, sub, mono = false
+}: { label: string; value: string; valueColor: string; sub: string; mono?: boolean }) => (
+  <div style={{
+    background: 'var(--surface-3)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+    padding: '18px 20px',
+  }}>
+    <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: '8px' }}>
+      {label}
+    </p>
+    <p style={{ fontSize: '22px', fontWeight: 900, color: valueColor, letterSpacing: '-0.02em', fontFamily: mono ? 'var(--font-body)' : 'var(--font-display)', lineHeight: 1 }}>
+      {value}
+    </p>
+    <p style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: '6px', lineHeight: 1.5 }}>
+      {sub}
+    </p>
+  </div>
+);
+
+/** Impact badge */
+const ImpactBadge = ({ impact }: { impact: string }) => {
+  const isCritical = impact === 'Critical';
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '5px',
+      fontSize: '9px', fontWeight: 900, letterSpacing: '0.14em',
+      textTransform: 'uppercase', padding: '4px 10px', borderRadius: '999px',
+      color: isCritical ? 'var(--red)' : 'var(--amber)',
+      background: isCritical ? 'rgba(240,77,92,0.08)' : 'rgba(240,163,77,0.08)',
+      border: `1px solid ${isCritical ? 'rgba(240,77,92,0.25)' : 'rgba(240,163,77,0.25)'}`,
+    }}>
+      <span style={{
+        width: '5px', height: '5px', borderRadius: '50%',
+        background: isCritical ? 'var(--red)' : 'var(--amber)',
+        flexShrink: 0,
+      }} />
+      {impact}
+    </span>
+  );
+};
+
+/* ─────────────────────────────────────────────
+   MAIN APP
+───────────────────────────────────────────── */
 
 function ReportApp() {
   const router = useRouter();
@@ -31,17 +214,14 @@ function ReportApp() {
     setError('');
     setReport(null);
     setCopied(false);
-
     try {
       const response = await fetch('/api/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain: targetDomain })
       });
-
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to audit domain');
-
       setReport(data);
     } catch (err: any) {
       setError(err.message);
@@ -52,55 +232,49 @@ function ReportApp() {
 
   const generateFixList = () => {
     if (!report) return [];
-    const fixes = [];
-
+    const fixes: { title: string; impact: string; advice: string }[] = [];
     if (report.authentication.spf === 'Fail') {
       fixes.push({
         title: "Authenticate Your Infrastructure (SPF)",
         impact: "Critical",
-        advice: `Your domain lacks a valid Sender Policy Framework (SPF) record. Google and Microsoft currently view your emails as spoofed threats and will reject them. This blocks approximately 40% of your outbound sends.`
+        advice: "Your domain lacks a valid Sender Policy Framework (SPF) record. Google and Microsoft currently view your emails as spoofed threats and will reject them."
       });
     }
-
     if (report.authentication.dmarc === 'Fail') {
       fixes.push({
         title: "Enforce a DMARC Protocol",
         impact: "Critical",
-        advice: `You are operating without a DMARC record. 2026 guidelines from tier-one providers strictly require this. Deploy a TXT record immediately to prevent spoofing and improve deliverability.`
+        advice: "You are operating without a DMARC record. 2026 guidelines from tier-one providers strictly require this. You must deploy a TXT record immediately."
       });
     }
-
     if (report.authentication.dmarc === 'Pass' && !report.authentication.dmarcStrict) {
       fixes.push({
         title: "Upgrade DMARC to Enforcement",
         impact: "High",
-        advice: `Your DMARC record is set to 'p=none'. Upgrade to 'p=quarantine' or 'p=reject' to satisfy strict enterprise filters and stop domain spoofing.`
+        advice: "Your DMARC record is set to 'p=none'. You must upgrade to 'p=quarantine' or 'p=reject' to satisfy strict enterprise filters and stop domain spoofing."
       });
     }
-
     if (report.blacklists.blacklistedCount > 3) {
       fixes.push({
         title: "Eradicate Active Blacklist Triggers",
         impact: "Critical",
-        advice: `Your IP is flagged on ${report.blacklists.blacklistedCount} global databases. Pause campaigns immediately, check your FCrDNS matching, and submit manual delisting requests. This is killing your inbox placement.`
+        advice: `Your IP is flagged on ${report.blacklists.blacklistedCount} global databases. Pause campaigns immediately, check your FCrDNS matching, and submit manual delisting requests.`
       });
     }
-
     if (report.age.days > 0 && report.age.days < 90) {
       fixes.push({
         title: "Initiate Domain Warmup",
         impact: "High",
-        advice: `Your domain is practically invisible (${report.age.days} days old). Zero inbox trust has been established. Warm this domain slowly before scaling volume, or you'll be flagged as a spam source.`
+        advice: `Your domain is practically invisible (${report.age.days} days old). Zero inbox trust has been established. You must warm this domain slowly before scaling volume.`
       });
     }
-
     return fixes;
   };
 
   const calculateSafeVolume = () => {
     if (!report) return "0";
     const { score, age, blacklists } = report;
-    if (score < 50 || (age.days > 0 && age.days < 30) || blacklists?.blacklistedCount > 3) return "50 – 100 (Warmup Mode)";
+    if (score < 50 || (age.days > 0 && age.days < 30) || blacklists?.blacklistedCount > 3) return "50 – 100";
     if (score >= 50 && score < 85) return "1,000 – 2,500";
     return "5,000 – 10,000+";
   };
@@ -111,342 +285,827 @@ function ReportApp() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const score = report?.score ?? 0;
+  const fixes = report ? generateFixList() : [];
+  const scoreColor = report
+    ? report.score >= 85 ? 'var(--green)'
+      : report.score >= 60 ? 'var(--amber)'
+      : 'var(--red)'
+    : 'var(--text-3)';
 
   return (
-    <main className="min-h-screen bg-[#060913] text-slate-300 font-sans selection:bg-cyan-900 selection:text-white relative overflow-hidden">
-      {/* Subtle glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-64 bg-teal-500/10 blur-[120px] rounded-full pointer-events-none print:hidden" />
+    <>
+      <style dangerouslySetInnerHTML={{ __html: GLOBAL_STYLES }} />
 
-      <div className="max-w-4xl mx-auto px-6 pt-20 pb-12 relative z-10 print:hidden">
-        {/* Badge – left aligned */}
-        <div className="mb-6">
-          <span className="inline-block px-4 py-1.5 rounded-full border border-teal-500/20 bg-teal-500/10 text-teal-400 text-xs font-bold tracking-widest uppercase">
-            Real-time DNS audit against 2026 mailbox provider requirements
-          </span>
-        </div>
+      <main style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative', overflowX: 'hidden' }}>
 
-        {/* Hero – left aligned with clean input */}
-        <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-4 leading-tight">
-          Your email infrastructure is leaking revenue.<br />
-          <span className="text-teal-400">Here's exactly where.</span>
-        </h1>
-        <p className="text-lg text-slate-400 mb-8 max-w-xl leading-relaxed">
-          We scan SPF, DMARC, blacklist databases, and domain age to identify every configuration error that's costing you inbox placement. Results in 60 seconds.
-        </p>
+        {/* ── Ambient background glow ── */}
+        <div className="print-hidden" style={{
+          position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)',
+          width: '900px', height: '500px', pointerEvents: 'none', zIndex: 0,
+          background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(12,242,208,0.055) 0%, transparent 80%)',
+        }} />
 
-        <form onSubmit={handleAudit} className="flex flex-col sm:flex-row gap-3 max-w-xl">
-          <input
-            type="text"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            placeholder="company.com"
-            className="flex-1 px-6 py-4 rounded-xl bg-[#0f1526] border border-white/5 text-white placeholder-slate-600 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 transition-all shadow-inner"
-            required
-          />
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="px-8 py-4 bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(10,191,191,0.2)] hover:shadow-[0_0_30px_rgba(10,191,191,0.4)] transition-all whitespace-nowrap"
-          >
-            {isLoading ? 'Scanning...' : 'Audit Infrastructure'}
-          </button>
-        </form>
-        {error && <p className="text-red-400 font-medium mt-4 bg-red-400/10 border border-red-400/20 py-2 px-4 rounded-lg max-w-xl">{error}</p>}
-      </div>
-
-      {/* Loading state with staggered lines */}
-      {isLoading && (
-        <div className="max-w-4xl mx-auto px-6 pb-20 text-center print:hidden">
-          <div className="flex flex-col items-center space-y-2">
-            <div className="w-12 h-12 border-4 border-[#0f1526] border-t-teal-500 rounded-full animate-spin mb-4 shadow-[0_0_15px_rgba(10,191,191,0.3)]" />
-            <style jsx>{`
-              .fade-in {
-                opacity: 0;
-                animation: fadeIn 0.5s ease forwards;
-              }
-              .fade-in:nth-child(1) { animation-delay: 0ms; }
-              .fade-in:nth-child(2) { animation-delay: 200ms; }
-              .fade-in:nth-child(3) { animation-delay: 400ms; }
-              @keyframes fadeIn {
-                to { opacity: 1; transform: translateY(0); }
-              }
-            `}</style>
-            <p className="fade-in text-cyan-400 font-semibold tracking-wide">Scanning Spamhaus, SORBS, and 48 other reputation systems...</p>
-            <p className="fade-in text-cyan-400 font-semibold tracking-wide">Validating SPF, DKIM, DMARC alignment...</p>
-            <p className="fade-in text-cyan-400 font-semibold tracking-wide">Analyzing domain reputation and age...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Report */}
-      {report && !isLoading && (
-        <div className="max-w-5xl mx-auto px-6 pb-32 relative z-10 print:pb-0">
-          {/* Action buttons row */}
-          <div className="flex justify-end gap-4 mb-6 print:hidden">
-            <button
-              onClick={handleCopyLink}
-              className="px-5 py-2.5 bg-[#0f1526] border border-white/5 text-slate-300 rounded-lg hover:bg-white/5 hover:text-white font-semibold transition-all flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-              {copied ? 'Copied' : 'Share Link'}
-            </button>
-            <button
-              onClick={() => window.print()}
-              className="px-5 py-2.5 bg-white text-slate-900 rounded-lg hover:bg-slate-200 font-bold transition-all flex items-center gap-2 shadow-lg"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              Export PDF
-            </button>
+        {/* ── NAV BAR ── */}
+        <nav className="print-hidden" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+          height: '56px', display: 'flex', alignItems: 'center',
+          padding: '0 32px',
+          background: 'rgba(4,7,15,0.82)',
+          backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid var(--border)',
+        }}>
+          {/* Logo mark */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="0.5" y="0.5" width="21" height="21" rx="5.5" stroke="rgba(12,242,208,0.4)" />
+              <path d="M6 11h10M11 6l5 5-5 5" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '13px', color: 'var(--text-1)', letterSpacing: '-0.01em' }}>
+              InboxProof
+            </span>
+            <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-3)', marginLeft: '4px' }}>
+              / Audit
+            </span>
           </div>
 
-          {/* Score card – with horizontal progress bar */}
-          <div className="bg-[#0c1221] rounded-3xl border border-white/[0.06] overflow-hidden mb-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)] print:bg-white print:border-none print:shadow-none print:rounded-none">
-            <div className="p-8 md:p-12 relative overflow-hidden print:bg-slate-100 print:text-slate-900">
-              <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none print:hidden" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.08em' }}>
+              2026 SENDER STANDARDS
+            </span>
+            <span style={{
+              width: '6px', height: '6px', borderRadius: '50%',
+              background: 'var(--accent)',
+              animation: 'pulse-dot 2s ease-in-out infinite',
+            }} />
+          </div>
+        </nav>
 
-              <h2 className="text-xs font-bold tracking-[0.2em] uppercase text-slate-500 print:text-slate-600 mb-4">
-                Infrastructure Report — {report.domain}
-              </h2>
+        {/* ── HERO ── */}
+        <section className="print-hidden grid-bg" style={{
+          position: 'relative', zIndex: 1,
+          paddingTop: '120px', paddingBottom: '80px',
+          borderBottom: '1px solid var(--border)',
+        }}>
 
-              {/* Score as big number with horizontal bar */}
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-8">
-                <div className="flex-shrink-0">
-                  <span className="text-7xl font-black tracking-tighter text-white print:text-slate-900">
-                    {score}
-                  </span>
-                  <span className="text-3xl font-bold text-slate-500 print:text-slate-400">/100</span>
-                </div>
-                <div className="flex-1 w-full">
-                  <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden print:bg-slate-300">
-                    <div
-                      className="h-full rounded-full transition-all duration-1000 ease-out"
-                      style={{
-                        width: `${score}%`,
-                        backgroundColor: score >= 85 ? '#4ade80' : score >= 60 ? '#facc15' : '#ef4444'
-                      }}
-                    />
-                  </div>
-                  <p className="mt-4 text-lg font-medium text-slate-300 print:text-slate-700">
-                    {score >= 85
-                      ? "Authentication is solid. Next: optimize engagement signals."
-                      : score >= 60
-                      ? "Your setup is costing you ~30% delivery. Fix enforcement gaps."
-                      : "Critical failures detected. Google will downgrade your reputation."}
-                  </p>
-                </div>
+          {/* Horizontal accent lines */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: '1px',
+            background: 'linear-gradient(90deg, transparent 0%, rgba(12,242,208,0.35) 40%, rgba(91,156,246,0.25) 70%, transparent 100%)',
+          }} />
+
+          <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 32px' }}>
+
+            {/* Eyebrow */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '28px' }}>
+              <div style={{ height: '1px', width: '32px', background: 'var(--accent)', opacity: 0.6 }} />
+              <span style={{
+                fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em',
+                textTransform: 'uppercase', color: 'var(--accent)',
+              }}>
+                Live DNS &amp; Reputation Analysis
+              </span>
+            </div>
+
+            {/* Headline — left aligned, massive weight contrast */}
+            <h1 style={{
+              fontFamily: 'var(--font-display)', fontWeight: 900,
+              fontSize: 'clamp(2.6rem, 5.5vw, 4.2rem)',
+              lineHeight: 1.03, letterSpacing: '-0.03em',
+              color: 'var(--text-1)', marginBottom: '20px',
+              maxWidth: '780px',
+            }}>
+              Your emails are being rejected<br />
+              <span style={{
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                backgroundImage: 'linear-gradient(95deg, #0CF2D0 0%, #5b9cf6 55%, #a78bfa 100%)',
+              }}>
+                before your customers ever open them.
+              </span>
+            </h1>
+
+            {/* Subheadline — briefing tone, left aligned */}
+            <p style={{
+              fontSize: '15px', lineHeight: 1.75, color: 'var(--text-2)',
+              maxWidth: '580px', marginBottom: '10px',
+            }}>
+              This audit validates your SPF record, DMARC enforcement policy, global blacklist status, and domain age against the exact sender requirements currently enforced by Gmail, Yahoo, and Outlook.
+            </p>
+            <p style={{
+              fontSize: '13px', lineHeight: 1.7, color: 'var(--text-3)',
+              maxWidth: '520px', marginBottom: '40px',
+            }}>
+              A single failure across any of these four checks is sufficient for inbox providers to silently filter your sends — regardless of your content, list quality, or sending volume.
+            </p>
+
+            {/* Form */}
+            <form onSubmit={handleAudit} style={{ display: 'flex', gap: '10px', maxWidth: '540px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, position: 'relative', minWidth: '240px' }}>
+                <input
+                  type="text"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                  placeholder="yourdomain.com"
+                  required
+                  style={{
+                    width: '100%', padding: '13px 18px',
+                    background: 'var(--surface-1)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px', color: 'var(--text-1)',
+                    fontSize: '13px', fontFamily: 'var(--font-body)',
+                    outline: 'none', transition: 'border-color 0.18s, box-shadow 0.18s',
+                    fontWeight: 500,
+                  }}
+                  onFocus={e => {
+                    e.target.style.borderColor = 'rgba(12,242,208,0.45)';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(12,242,208,0.08)';
+                  }}
+                  onBlur={e => {
+                    e.target.style.borderColor = 'var(--border)';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
               </div>
-            </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                style={{
+                  padding: '13px 24px',
+                  background: isLoading ? 'rgba(12,242,208,0.5)' : 'var(--accent)',
+                  border: 'none', borderRadius: '10px',
+                  color: '#04070f', fontWeight: 900,
+                  fontSize: '12px', letterSpacing: '0.04em',
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  fontFamily: 'var(--font-display)',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 0.18s, box-shadow 0.18s, transform 0.14s',
+                  boxShadow: '0 0 20px rgba(12,242,208,0.2)',
+                }}
+                onMouseEnter={e => {
+                  if (!isLoading) {
+                    (e.target as HTMLButtonElement).style.background = '#0adab9';
+                    (e.target as HTMLButtonElement).style.boxShadow = '0 0 30px rgba(12,242,208,0.32)';
+                    (e.target as HTMLButtonElement).style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  (e.target as HTMLButtonElement).style.background = isLoading ? 'rgba(12,242,208,0.5)' : 'var(--accent)';
+                  (e.target as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(12,242,208,0.2)';
+                  (e.target as HTMLButtonElement).style.transform = 'translateY(0)';
+                }}
+              >
+                {isLoading ? 'Scanning…' : 'Run Audit →'}
+              </button>
+            </form>
 
-            {/* Safe volume */}
-            <div className="bg-gradient-to-r from-teal-950/40 via-blue-900/20 to-teal-950/40 border-y border-white/[0.06] p-8 text-center print:bg-white print:border-slate-300 relative">
-              <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-teal-500/50 to-transparent print:hidden" />
-              <h3 className="text-xs font-bold text-teal-400 print:text-slate-500 uppercase tracking-[0.2em] mb-1">
-                Estimated Safe Weekly Volume
-              </h3>
-              <p className="text-sm text-slate-400 print:text-slate-600 mb-2">
-                Based on your current score and blacklist status.
-              </p>
-              <p className="text-4xl font-black text-white print:text-slate-900 tracking-tight">
-                {calculateSafeVolume()}
-              </p>
-            </div>
-
-            {/* Metrics grid – all six in one grid with consistent styling */}
-            <div className="p-8 md:p-12">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-[0.15em] mb-6">
-                Configuration Deep-Dive
-              </h3>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* SPF */}
-                <div className="relative overflow-hidden rounded-2xl bg-[#111827] border border-white/[0.06] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] print:bg-slate-50 print:border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1 print:text-slate-600">SPF Record</span>
-                  <span className={`text-2xl font-bold tracking-tight ${report.authentication.spf === 'Pass' ? 'text-green-400 print:text-green-600' : 'text-red-400 print:text-red-600'}`}>
-                    {report.authentication.spf}
-                  </span>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {report.authentication.spf === 'Pass'
-                      ? 'SPF matches your sending IPs.'
-                      : 'SPF does not authorize your sending IPs.'}
-                  </p>
-                </div>
-
-                {/* DMARC */}
-                <div className="relative overflow-hidden rounded-2xl bg-[#111827] border border-white/[0.06] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] print:bg-slate-50 print:border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1 print:text-slate-600">DMARC Enforcement</span>
-                  <span className={`text-2xl font-bold tracking-tight ${report.authentication.dmarcStrict === true ? 'text-green-400 print:text-green-600' : 'text-red-400 print:text-red-600'}`}>
-                    {report.authentication.dmarcStrict ? 'Strict' : report.authentication.dmarc === 'Pass' ? 'Monitor Only' : 'Fail'}
-                  </span>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {report.authentication.dmarcStrict
-                      ? 'Enforcement active, preventing spoofing.'
-                      : report.authentication.dmarc === 'Pass'
-                      ? 'Emails can be spoofed. Upgrade to p=quarantine.'
-                      : 'No DMARC policy found.'}
-                  </p>
-                </div>
-
-                {/* Blacklists */}
-                <div className="relative overflow-hidden rounded-2xl bg-[#111827] border border-white/[0.06] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] print:bg-slate-50 print:border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1 print:text-slate-600">Global Blacklists</span>
-                  <span className={`text-2xl font-bold tracking-tight ${report.blacklists.blacklistedCount === 0 ? 'text-green-400 print:text-green-600' : report.blacklists.blacklistedCount <= 3 ? 'text-yellow-400 print:text-yellow-600' : 'text-red-400 print:text-red-600'}`}>
-                    {report.blacklists.blacklistedCount} / {report.blacklists.totalChecked}
-                  </span>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {report.blacklists.blacklistedCount === 0
-                      ? 'Clean — no blacklists.'
-                      : report.blacklists.blacklistedCount <= 3
-                      ? 'Some blacklists flagged — investigate.'
-                      : 'Multiple blacklists — urgent action needed.'}
-                  </p>
-                </div>
-
-                {/* BIMI */}
-                <div className="relative overflow-hidden rounded-2xl bg-[#111827] border border-white/[0.06] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] print:bg-slate-50 print:border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1 print:text-slate-600">BIMI Brand Indicator</span>
-                  <span className={`text-xl font-bold tracking-tight text-slate-300 print:text-slate-700`}>
-                    {report.authentication.bimi === 'Pass' ? 'Installed' : 'Not Installed'}
-                  </span>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {report.authentication.bimi === 'Pass'
-                      ? 'Logo will display in supported inboxes.'
-                      : 'No BIMI record found.'}
-                  </p>
-                </div>
-
-                {/* MTA-STS */}
-                <div className="relative overflow-hidden rounded-2xl bg-[#111827] border border-white/[0.06] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] print:bg-slate-50 print:border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1 print:text-slate-600">MTA-STS Protocol</span>
-                  <span className={`text-xl font-bold tracking-tight text-slate-300 print:text-slate-700`}>
-                    {report.authentication.mtasts === 'Pass' ? 'Installed' : 'Not Installed'}
-                  </span>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {report.authentication.mtasts === 'Pass'
-                      ? 'Encryption enforced for transit.'
-                      : 'No MTA-STS record found.'}
-                  </p>
-                </div>
-
-                {/* Domain Age */}
-                <div className="relative overflow-hidden rounded-2xl bg-[#111827] border border-white/[0.06] p-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] print:bg-slate-50 print:border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1 print:text-slate-600">Registered Age</span>
-                  <span className="text-xl font-bold tracking-tight text-slate-300 print:text-slate-700">
-                    {report.age.days > 0 ? `${report.age.days} days` : 'Unknown'}
-                  </span>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {report.age.days > 0
-                      ? `Registered ${report.age.days} days ago.`
-                      : 'Age data unavailable.'}
-                  </p>
-                </div>
+            {error && (
+              <div style={{
+                marginTop: '14px', padding: '10px 16px',
+                background: 'rgba(240,77,92,0.07)',
+                border: '1px solid rgba(240,77,92,0.22)',
+                borderRadius: '8px', color: 'var(--red)',
+                fontSize: '12px', fontWeight: 500, maxWidth: '540px',
+              }}>
+                {error}
               </div>
-            </div>
+            )}
+
           </div>
+        </section>
 
-          {/* Diagnostic Engine – vertical list with numbered items and subtle icons */}
-          <div className="mb-12 relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-950/40 to-[#0c1221] border border-red-500/30 p-8 md:p-10 shadow-[0_0_30px_rgba(239,68,68,0.1)] print:border-slate-300 print:bg-white">
-            <h3 className="text-2xl font-black text-white mb-4 print:text-slate-900 tracking-tight">
-              The Invisible Filters That Kill Deliverability
-            </h3>
-            <div className="space-y-4 text-slate-300 print:text-slate-600 mb-8">
-              <p className="leading-relaxed text-lg">
-                Perfect DNS is only 10% of the battle. These three behavioral triggers determine if you land in Primary or Promotions.
+        {/* ── LOADING ── */}
+        {isLoading && (
+          <section className="print-hidden" style={{
+            maxWidth: '900px', margin: '0 auto',
+            padding: '64px 32px',
+            position: 'relative', zIndex: 1,
+          }}>
+            <div style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              borderRadius: '16px', padding: '40px',
+              position: 'relative', overflow: 'hidden',
+            }} className="scan-line">
+              <CardAccentLine />
+              <p style={{
+                fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em',
+                textTransform: 'uppercase', color: 'var(--accent)',
+                marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '10px',
+              }}>
+                <span style={{
+                  width: '16px', height: '16px',
+                  border: '2px solid rgba(12,242,208,0.2)',
+                  borderTopColor: 'var(--accent)',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                  display: 'inline-block', flexShrink: 0,
+                }} />
+                Audit in progress
               </p>
-            </div>
 
-            <div className="space-y-4">
               {[
-                {
-                  number: '01',
-                  title: 'Google Postmaster Spam Rate',
-                  desc: 'If users mark your emails as spam at a rate higher than 0.30%, Google will permanently route your domain to the spam folder, regardless of your DNS setup.'
-                },
-                {
-                  number: '02',
-                  title: 'RFC 8058 Non-Compliance',
-                  desc: 'As of 2026, Gmail and Yahoo require the exact List-Unsubscribe-Post header. If you only use a text link, you are violating the one-click mandate and will be filtered.'
-                },
-                {
-                  number: '03',
-                  title: 'Low Engagement Signals',
-                  desc: 'If recipients routinely ignore your emails without replying, forwarding, or starring them, Microsoft\'s SNDS and Google\'s algorithms will classify your domain content as low-value promotional mail.'
-                }
-              ].map((item) => (
-                <div key={item.number} className="flex gap-4 items-start bg-[#111827] p-5 rounded-xl border border-white/5 print:bg-slate-50 print:border-slate-200">
-                  <span className="text-3xl font-mono font-black text-red-500/30 print:text-slate-400 leading-none select-none">
-                    {item.number}
-                  </span>
-                  <div>
-                    <h4 className="font-bold text-white print:text-slate-800">{item.title}</h4>
-                    <p className="text-sm text-slate-400 print:text-slate-600 leading-relaxed">{item.desc}</p>
-                  </div>
+                { label: 'Querying SPF and DMARC records via authoritative DNS…', delay: '0s' },
+                { label: 'Cross-referencing Spamhaus, SORBS, Barracuda, SpamCop, and 46 additional reputation databases…', delay: '0.6s' },
+                { label: 'Resolving WHOIS registration date and domain age signal…', delay: '1.2s' },
+                { label: 'Checking BIMI, MTA-STS, and TLS enforcement policies…', delay: '1.8s' },
+              ].map((item, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: '12px',
+                  marginBottom: '14px',
+                  animation: `fadeIn 0.3s ease ${item.delay} both`,
+                }}>
+                  <span style={{
+                    width: '5px', height: '5px', borderRadius: '50%',
+                    background: 'var(--accent)', flexShrink: 0, marginTop: '5px',
+                    opacity: 0.5,
+                  }} />
+                  <p style={{ fontSize: '12px', color: 'var(--text-3)', lineHeight: 1.6 }}>
+                    {item.label}
+                  </p>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
+        )}
 
-          {/* Fix List */}
-          {generateFixList().length > 0 && (
-            <div className="mb-16 print:break-inside-avoid">
-              <div className="flex items-center gap-6 mb-8">
-                <h3 className="text-2xl font-black text-white print:text-slate-900 tracking-tight">Technical Fix List</h3>
-                <div className="h-px bg-white/10 flex-1 print:bg-slate-300" />
+        {/* ── REPORT ── */}
+        {report && !isLoading && (
+          <section style={{
+            maxWidth: '960px', margin: '0 auto',
+            padding: '48px 32px 120px',
+            position: 'relative', zIndex: 1,
+          }}>
+
+            {/* ── Share / Export ── */}
+            <div className="print-hidden stagger-1" style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              marginBottom: '28px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{
+                  width: '6px', height: '6px', borderRadius: '50%',
+                  background: 'var(--green)',
+                  boxShadow: '0 0 8px rgba(52,211,153,0.5)',
+                }} />
+                <span style={{ fontSize: '11px', color: 'var(--text-3)', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+                  Audit complete — {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
               </div>
-
-              <div className="space-y-6">
-                {generateFixList().map((fix, index) => (
-                  <div key={index} className="relative group overflow-hidden rounded-2xl bg-[#0c1221] border border-white/[0.06] p-8 shadow-lg transition-all hover:border-white/10 print:bg-white print:border-slate-300 print:shadow-none">
-                    {/* Decorative number */}
-                    <span className="absolute top-4 right-6 font-mono text-6xl font-black text-white/5 print:text-slate-200 select-none">
-                      {String(index + 1).padStart(2, '0')}
-                    </span>
-
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
-                      <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest w-fit ${
-                        fix.impact === 'Critical'
-                          ? 'bg-red-500/10 border border-red-500/20 text-red-400 print:bg-red-100 print:text-red-700 print:border-red-300'
-                          : 'bg-amber-500/10 border border-amber-500/20 text-amber-400 print:bg-amber-100 print:text-amber-700 print:border-amber-300'
-                      }`}>
-                        {fix.impact} Priority
-                      </span>
-                      <h4 className="text-xl font-bold text-white print:text-slate-900">{fix.title}</h4>
-                    </div>
-                    <p className="text-slate-400 print:text-slate-600 leading-relaxed text-base pl-1">{fix.advice}</p>
-                  </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[
+                  {
+                    label: copied ? '✓ Copied' : 'Share Link',
+                    onClick: handleCopyLink,
+                    icon: (
+                      <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                    ),
+                    primary: false,
+                  },
+                  {
+                    label: 'Export PDF',
+                    onClick: () => window.print(),
+                    icon: (
+                      <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    ),
+                    primary: true,
+                  },
+                ].map((btn, i) => (
+                  <button
+                    key={i}
+                    onClick={btn.onClick}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '8px 14px',
+                      background: btn.primary ? 'var(--text-1)' : 'var(--surface-2)',
+                      border: `1px solid ${btn.primary ? 'transparent' : 'var(--border)'}`,
+                      borderRadius: '8px',
+                      color: btn.primary ? 'var(--bg)' : 'var(--text-2)',
+                      fontSize: '11px', fontWeight: 700,
+                      cursor: 'pointer', fontFamily: 'var(--font-body)',
+                      transition: 'background 0.15s, color 0.15s, transform 0.12s',
+                    }}
+                    onMouseEnter={e => {
+                      const el = e.currentTarget;
+                      el.style.background = btn.primary ? '#e2e8f0' : 'var(--surface-3)';
+                      el.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={e => {
+                      const el = e.currentTarget;
+                      el.style.background = btn.primary ? 'var(--text-1)' : 'var(--surface-2)';
+                      el.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    {btn.icon}
+                    {btn.label}
+                  </button>
                 ))}
               </div>
             </div>
-          )}
 
-          {/* Final CTA */}
-          <div className="bg-[#0c1221] rounded-3xl p-12 md:p-16 text-center border border-teal-500/20 shadow-[0_0_60px_rgba(10,191,191,0.08)] print:hidden relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-900/20 to-transparent pointer-events-none" />
-            <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/10 rounded-full blur-[100px] -mr-40 -mt-40 pointer-events-none" />
+            {/* ── SCORE CARD ── */}
+            <div className="stagger-2" style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              borderRadius: '20px', overflow: 'hidden',
+              marginBottom: '16px',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
+              position: 'relative',
+            }}>
+              <CardAccentLine />
 
-            <h3 className="text-3xl md:text-4xl font-extrabold mb-6 text-white relative z-10 leading-tight tracking-tight">
-              In a 45-minute consultation, we'll dissect your subject line psychology, reply triggers, and list hygiene to ensure you hit the Primary tab.
-            </h3>
-            <p className="text-lg text-slate-400 mb-10 max-w-3xl mx-auto leading-relaxed relative z-10">
-              You'll receive a clear roadmap to fix your behavioral signals and stop leaking revenue to the spam folder.
-            </p>
-            <a
-              href="https://your-booking-link-here.com"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block px-12 py-5 bg-white text-slate-950 font-black rounded-xl shadow-[0_0_30px_rgba(255,255,255,0.1)] text-lg hover:scale-[1.02] hover:bg-slate-100 transition-all relative z-10 uppercase tracking-widest"
-            >
-              Book Your Deliverability Audit
-            </a>
-          </div>
-        </div>
-      )}
-    </main>
+              {/* Score header row */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr auto',
+                gap: '24px', padding: '40px 44px 36px',
+                alignItems: 'start',
+              }}>
+                <div>
+                  <p style={{
+                    fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em',
+                    textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: '10px',
+                  }}>
+                    Infrastructure Assessment — <span style={{ color: 'var(--text-2)' }}>{report.domain}</span>
+                  </p>
+
+                  {/* Score number */}
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', marginBottom: '16px' }}>
+                    <span style={{
+                      fontFamily: 'var(--font-display)', fontWeight: 900,
+                      fontSize: 'clamp(5rem, 9vw, 7.5rem)',
+                      lineHeight: 1, letterSpacing: '-0.04em',
+                      color: scoreColor,
+                      filter: `drop-shadow(0 0 28px ${scoreColor}44)`,
+                    }}>
+                      {report.score}
+                    </span>
+                    <span style={{
+                      fontSize: '26px', fontWeight: 700, color: 'var(--text-3)',
+                      marginBottom: '12px', fontFamily: 'var(--font-display)',
+                    }}>
+                      / 100
+                    </span>
+                  </div>
+
+                  {/* Progress track */}
+                  <div style={{
+                    width: '280px', maxWidth: '100%', height: '3px',
+                    borderRadius: '999px', background: 'var(--surface-3)',
+                    marginBottom: '18px', overflow: 'hidden',
+                  }}>
+                    <div
+                      className="progress-bar"
+                      style={{
+                        height: '100%', borderRadius: '999px',
+                        background: scoreColor,
+                        '--target-w': `${report.score}%`,
+                        boxShadow: `0 0 8px ${scoreColor}`,
+                      } as React.CSSProperties}
+                    />
+                  </div>
+
+                  {/* Verdict */}
+                  <p style={{
+                    fontSize: '13px', lineHeight: 1.7, color: 'var(--text-2)',
+                    maxWidth: '480px',
+                  }}>
+                    {report.score >= 85
+                      ? 'Your authentication stack is correctly configured. The remaining risk lies in behavioral signals — engagement rate, unsubscribe header compliance, and list hygiene — none of which DNS records can fix.'
+                      : report.score >= 60
+                      ? 'A configuration gap is actively reducing your delivery rate. Senders in this range typically see 15–30% of sends silently deferred or junked before any recipient sees a subject line.'
+                      : 'Critical authentication failures detected. Inbox providers are actively rejecting or routing your sends to spam. This domain is not safe for outbound email until these failures are resolved.'}
+                  </p>
+                </div>
+
+                {/* Right: volume pill */}
+                <div style={{
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '14px', padding: '24px 28px',
+                  textAlign: 'center', minWidth: '200px',
+                }}>
+                  <p style={{
+                    fontSize: '9px', fontWeight: 800, letterSpacing: '0.18em',
+                    textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: '10px',
+                  }}>
+                    Weekly send ceiling
+                  </p>
+                  <p style={{
+                    fontFamily: 'var(--font-display)', fontWeight: 900,
+                    fontSize: '28px', color: 'var(--text-1)', letterSpacing: '-0.02em',
+                    lineHeight: 1, marginBottom: '8px',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {calculateSafeVolume()}
+                  </p>
+                  <p style={{ fontSize: '10px', color: 'var(--text-3)', lineHeight: 1.5 }}>
+                    Based on your current reputation score. Exceeding this accelerates decay in Google and Microsoft's filtering models.
+                  </p>
+                </div>
+              </div>
+
+              <Divider />
+
+              {/* Auth metrics grid */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr',
+                gap: '0',
+              }}>
+                {/* Left column */}
+                <div style={{ padding: '36px 44px', borderRight: '1px solid var(--border)' }}>
+                  <p style={{
+                    fontSize: '10px', fontWeight: 800, letterSpacing: '0.16em',
+                    textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: '6px',
+                  }}>
+                    Gate-Level Checks
+                  </p>
+                  <p style={{ fontSize: '11px', color: 'var(--text-3)', lineHeight: 1.6, marginBottom: '22px', maxWidth: '320px' }}>
+                    Evaluated before your subject line is ever rendered. One failure here causes silent discard by Gmail, Yahoo, or Outlook.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <MetricCell
+                      label="SPF Record"
+                      value={report.authentication.spf}
+                      valueColor={report.authentication.spf === 'Pass' ? 'var(--green)' : 'var(--red)'}
+                      sub={report.authentication.spf === 'Pass'
+                        ? 'Authorised senders declared. Send origin is verifiable.'
+                        : 'No authorised senders. Every outbound send is unverifiable.'}
+                    />
+                    <MetricCell
+                      label="DMARC Policy"
+                      value={
+                        report.authentication.dmarcStrict ? 'Enforced'
+                        : report.authentication.dmarc === 'Pass' ? 'Monitor Only'
+                        : 'Not Present'
+                      }
+                      valueColor={report.authentication.dmarcStrict ? 'var(--green)' : 'var(--red)'}
+                      sub={
+                        report.authentication.dmarcStrict
+                          ? 'p=quarantine or p=reject. Spoofed sends are blocked at the gate.'
+                          : report.authentication.dmarc === 'Pass'
+                          ? 'p=none — spoofed sends go unblocked. Upgrade to p=quarantine.'
+                          : '2026 Gmail and Yahoo mandates require a DMARC record. Deploy immediately.'
+                      }
+                    />
+                    <MetricCell
+                      label="Global Blacklists"
+                      value={`${report.blacklists.blacklistedCount} / ${report.blacklists.totalChecked}`}
+                      valueColor={
+                        report.blacklists.blacklistedCount === 0 ? 'var(--green)'
+                        : report.blacklists.blacklistedCount <= 3 ? 'var(--amber)'
+                        : 'var(--red)'
+                      }
+                      sub={
+                        report.blacklists.blacklistedCount === 0
+                          ? `Clean across all ${report.blacklists.totalChecked} reputation databases checked.`
+                          : report.blacklists.blacklistedCount <= 3
+                          ? `${report.blacklists.blacklistedCount} active listing(s). Submit delisting requests before scaling.`
+                          : `${report.blacklists.blacklistedCount} listings. Pause all sends and begin manual delisting now.`
+                      }
+                      mono
+                    />
+                  </div>
+                </div>
+
+                {/* Right column */}
+                <div style={{ padding: '36px 44px' }}>
+                  <p style={{
+                    fontSize: '10px', fontWeight: 800, letterSpacing: '0.16em',
+                    textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: '6px',
+                  }}>
+                    Trust Signals
+                  </p>
+                  <p style={{ fontSize: '11px', color: 'var(--text-3)', lineHeight: 1.6, marginBottom: '22px', maxWidth: '320px' }}>
+                    Optional records that improve enterprise filter trust scores, inbox brand visibility, and transport security. None of these affect spam routing.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <MetricCell
+                      label="BIMI Brand Indicator"
+                      value={report.authentication.bimi === 'Pass' ? 'Configured' : 'Not Installed'}
+                      valueColor="var(--text-2)"
+                      sub="Displays your logo in Gmail and Apple Mail inbox rows. Purely visual — no spam routing effect."
+                    />
+                    <MetricCell
+                      label="MTA-STS Policy"
+                      value={report.authentication.mtasts === 'Pass' ? 'Configured' : 'Not Installed'}
+                      valueColor="var(--text-2)"
+                      sub="Forces TLS on all inbound connections. Protects against downgrade attacks and raises enterprise filter trust."
+                    />
+                    <MetricCell
+                      label="Registered Domain Age"
+                      value={report.age.days > 0 ? `${report.age.days} days` : 'Unknown'}
+                      valueColor="var(--text-2)"
+                      sub={
+                        report.age.days > 0 && report.age.days < 90
+                          ? 'Under 90 days — sending history is near-zero. Warmup required before scaling.'
+                          : report.age.days >= 90
+                          ? 'Sufficient age for reputation to carry history. Delivery now depends on behavioral signals.'
+                          : 'Age could not be resolved from WHOIS records.'
+                      }
+                      mono
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── BEHAVIORAL DIAGNOSTIC ── */}
+            <div className="stagger-3" style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              borderRadius: '20px', overflow: 'hidden',
+              marginBottom: '16px',
+              position: 'relative',
+            }}>
+              <CardAccentLine />
+
+              <div style={{ padding: '40px 44px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '32px', marginBottom: '36px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '280px' }}>
+                    <p style={{
+                      fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em',
+                      textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: '8px',
+                    }}>
+                      Beyond your DNS records
+                    </p>
+                    <h2 style={{
+                      fontFamily: 'var(--font-display)', fontWeight: 900,
+                      fontSize: 'clamp(1.35rem, 2.5vw, 1.75rem)',
+                      letterSpacing: '-0.02em', color: 'var(--text-1)',
+                      lineHeight: 1.15, marginBottom: '14px',
+                    }}>
+                      The Behavioral Layer —<br />Where Clean Infrastructure Still Fails
+                    </h2>
+                  </div>
+                  <div style={{ maxWidth: '380px' }}>
+                    <p style={{ fontSize: '13px', lineHeight: 1.75, color: 'var(--text-2)', marginBottom: '10px' }}>
+                      DNS authentication accounts for roughly 10% of inbox placement decisions. The remaining 90% is behavioral — how recipients respond, whether your headers comply with RFC mandates, and whether your engagement signals classify your domain as high-value or low-value.
+                    </p>
+                    <p style={{ fontSize: '12px', lineHeight: 1.7, color: 'var(--text-3)' }}>
+                      An Infrastructure Score above 85 does not guarantee primary tab placement. Any of the following three triggers — if present — will cause Gmail and Microsoft to silently route your sends to spam.
+                    </p>
+                  </div>
+                </div>
+
+                <Divider />
+
+                {/* Numbered diagnostic items */}
+                <div style={{ marginTop: '32px' }}>
+                  {[
+                    {
+                      num: '01',
+                      title: "Google's 0.30% Spam Rate Threshold Doesn't Reset Automatically",
+                      body: <>Once recipients manually mark your sends as spam at a rate exceeding <strong style={{ color: 'var(--text-1)', fontWeight: 700 }}>0.30%</strong>, Google Postmaster flags your domain — and that classification persists beyond the triggering campaign. Recovery requires suppressing all non-openers, cleaning your list, and holding send volume under 500/day while you actively monitor the score inside Google Postmaster Tools. It does not self-correct.</>,
+                    },
+                    {
+                      num: '02',
+                      title: <>Missing <code style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--accent)', background: 'rgba(12,242,208,0.07)', padding: '2px 7px', borderRadius: '5px' }}>List-Unsubscribe-Post</code> Header Violates RFC 8058</>,
+                      body: <>Since February 2024, Gmail and Yahoo require one-click unsubscribe via the <strong style={{ color: 'var(--text-1)', fontWeight: 700 }}>List-Unsubscribe-Post</strong> header (RFC 8058). A footer text link does not satisfy this mandate. ESPs that don't inject this header automatically require you to set it manually. Its absence causes infrastructure-level filtering before any recipient can see your email.</>,
+                    },
+                    {
+                      num: '03',
+                      title: "Low Engagement Signals Train Filters Against Your Domain — Permanently",
+                      body: <>Microsoft SNDS and Gmail's engagement models score what recipients do with your emails. Consistent non-engagement — no replies, no forwards, no stars — progressively reclassifies your domain as low-value promotional content. The fix is not technical: it requires reducing your list to the most engaged segment and engineering a reply signal within the first two sends to a new contact.</>,
+                    },
+                  ].map((item, i) => (
+                    <div key={i}>
+                      {i > 0 && <div style={{ height: '1px', background: 'var(--border)', margin: '28px 0' }} />}
+                      <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: '20px', alignItems: 'start' }}>
+                        <span style={{
+                          fontFamily: 'monospace', fontWeight: 900,
+                          fontSize: '2.8rem', color: 'var(--surface-3)',
+                          lineHeight: 1, letterSpacing: '-0.04em',
+                          userSelect: 'none',
+                        }}>
+                          {item.num}
+                        </span>
+                        <div>
+                          <h3 style={{
+                            fontFamily: 'var(--font-display)', fontWeight: 800,
+                            fontSize: '14px', color: 'var(--text-1)',
+                            lineHeight: 1.35, marginBottom: '10px', letterSpacing: '-0.01em',
+                          }}>
+                            {item.title}
+                          </h3>
+                          <p style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: 1.75 }}>
+                            {item.body}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+              </div>
+            </div>
+
+            {/* ── FIX LIST ── */}
+            {fixes.length > 0 && (
+              <div className="stagger-4" style={{ marginBottom: '16px' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px',
+                }}>
+                  <h2 style={{
+                    fontFamily: 'var(--font-display)', fontWeight: 900,
+                    fontSize: '15px', color: 'var(--text-1)',
+                    letterSpacing: '-0.01em', whiteSpace: 'nowrap',
+                  }}>
+                    Required Fixes
+                  </h2>
+                  <span style={{
+                    fontSize: '10px', fontWeight: 700, color: 'var(--text-3)',
+                    background: 'var(--surface-2)', border: '1px solid var(--border)',
+                    borderRadius: '999px', padding: '3px 10px',
+                  }}>
+                    {fixes.length} {fixes.length === 1 ? 'item' : 'items'}
+                  </span>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {fixes.map((fix, index) => (
+                    <div
+                      key={index}
+                      className="card-lift"
+                      style={{
+                        background: 'var(--surface-1)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '16px', overflow: 'hidden',
+                        position: 'relative',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      {/* Decorative index */}
+                      <span style={{
+                        position: 'absolute', top: '12px', right: '20px',
+                        fontFamily: 'monospace', fontWeight: 900,
+                        fontSize: '4rem', lineHeight: 1,
+                        color: 'rgba(255,255,255,0.022)',
+                        letterSpacing: '-0.04em', userSelect: 'none',
+                        pointerEvents: 'none',
+                      }}>
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+
+                      {/* Left accent — only 4px top, not full side */}
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
+                        background: fix.impact === 'Critical'
+                          ? 'linear-gradient(90deg, var(--red), transparent 80%)'
+                          : 'linear-gradient(90deg, var(--amber), transparent 80%)',
+                      }} />
+
+                      <div style={{ padding: '24px 28px' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                          <ImpactBadge impact={fix.impact} />
+                          <h3 style={{
+                            fontFamily: 'var(--font-display)', fontWeight: 800,
+                            fontSize: '15px', color: 'var(--text-1)',
+                            letterSpacing: '-0.01em', lineHeight: 1.25,
+                          }}>
+                            {fix.title}
+                          </h3>
+                        </div>
+                        <p style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: 1.75 }}>
+                          {fix.advice}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── CTA ── */}
+            <div className="print-hidden stagger-5" style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              borderRadius: '20px', overflow: 'hidden',
+              position: 'relative',
+              boxShadow: '0 0 80px rgba(0,0,0,0.4)',
+            }}>
+              <CardAccentLine />
+
+              {/* Subtle teal bloom — contained, not decorative */}
+              <div style={{
+                position: 'absolute', top: 0, right: 0,
+                width: '400px', height: '300px', pointerEvents: 'none',
+                background: 'radial-gradient(circle at 90% 10%, rgba(12,242,208,0.055) 0%, transparent 60%)',
+              }} />
+
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr auto',
+                gap: '40px', padding: '48px 52px',
+                alignItems: 'center', flexWrap: 'wrap',
+              }}>
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  <p style={{
+                    fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em',
+                    textTransform: 'uppercase', color: 'var(--accent)', opacity: 0.8,
+                    marginBottom: '14px',
+                  }}>
+                    45-Minute Deliverability Review
+                  </p>
+                  <h2 style={{
+                    fontFamily: 'var(--font-display)', fontWeight: 900,
+                    fontSize: 'clamp(1.5rem, 3vw, 2.1rem)',
+                    letterSpacing: '-0.025em', color: 'var(--text-1)',
+                    lineHeight: 1.15, marginBottom: '16px',
+                  }}>
+                    Leave with a working fix,<br />not a list of things to research.
+                  </h2>
+                  <p style={{ fontSize: '13px', color: 'var(--text-2)', lineHeight: 1.75, marginBottom: '10px', maxWidth: '520px' }}>
+                    We will audit your subject line structure, reply-baiting strategy, list segmentation, and <code style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-2)', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>List-Unsubscribe-Post</code> header configuration — the four behavioral factors that determine whether your sends land in Primary or Promotions.
+                  </p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-3)', lineHeight: 1.7, maxWidth: '480px' }}>
+                    You will leave with a prioritised fix sequence, ESP-specific implementation steps, and a warmup volume schedule calibrated to your current Infrastructure Score of <strong style={{ color: 'var(--text-2)', fontWeight: 700 }}>{report.score}/100</strong>.
+                  </p>
+                </div>
+
+                <div style={{ position: 'relative', zIndex: 1, flexShrink: 0 }}>
+                  <a
+                    href="https://your-booking-link-here.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: 'block', padding: '16px 32px',
+                      background: 'var(--accent)',
+                      color: '#04070f', fontWeight: 900,
+                      fontSize: '12px', letterSpacing: '0.05em',
+                      fontFamily: 'var(--font-display)',
+                      borderRadius: '12px', textDecoration: 'none',
+                      textAlign: 'center', whiteSpace: 'nowrap',
+                      boxShadow: '0 0 28px rgba(12,242,208,0.22)',
+                      transition: 'background 0.16s, box-shadow 0.16s, transform 0.12s',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLAnchorElement).style.background = '#0adab9';
+                      (e.currentTarget as HTMLAnchorElement).style.boxShadow = '0 0 40px rgba(12,242,208,0.38)';
+                      (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLAnchorElement).style.background = 'var(--accent)';
+                      (e.currentTarget as HTMLAnchorElement).style.boxShadow = '0 0 28px rgba(12,242,208,0.22)';
+                      (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(0)';
+                    }}
+                  >
+                    Book Infrastructure Review →
+                  </a>
+                  <p style={{ fontSize: '10px', color: 'var(--text-3)', textAlign: 'center', marginTop: '10px' }}>
+                    45 min · No obligation
+                  </p>
+                </div>
+              </div>
+            </div>
+
+          </section>
+        )}
+
+        {/* ── FOOTER ── */}
+        {!isLoading && (
+          <footer className="print-hidden" style={{
+            borderTop: '1px solid var(--border)',
+            padding: '24px 32px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            maxWidth: '960px', margin: '0 auto',
+            flexWrap: 'wrap', gap: '12px',
+          }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>
+              InboxProof · Live DNS Audit
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--text-3)', fontFamily: 'monospace' }}>
+              2026 Gmail · Yahoo · Outlook Sender Mandates
+            </span>
+          </footer>
+        )}
+
+      </main>
+    </>
   );
 }
 
 export default function Home() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#060913] flex items-center justify-center text-teal-500/50 text-sm font-bold tracking-[0.3em]">INITIALIZING SECURE ENVIRONMENT...</div>}>
+    <Suspense
+      fallback={
+        <div style={{
+          minHeight: '100vh', background: '#04070f',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span style={{
+            fontSize: '10px', fontWeight: 700, letterSpacing: '0.3em',
+            textTransform: 'uppercase', color: 'rgba(12,242,208,0.3)',
+            fontFamily: 'monospace',
+          }}>
+            Initialising…
+          </span>
+        </div>
+      }
+    >
       <ReportApp />
     </Suspense>
   );
